@@ -1,0 +1,81 @@
+* circe-notifications
+
+[[./screenshot.png]]
+
+Inspired by [[https://github.com/tomterl][tomterl]] on =#emacs-circe= who posted [[https://github.com/jorgenschaefer/circe/wiki/Configuration#tracking-send-desktop-notifications-on-buffer-activity][this]] configuration snippet, and
+Julien Danjou's [[http://julien.danjou.info/blog/2012/erc-notifications][erc-desktop-notifications]].
+
+** Features
+
+   - Adds desktop notifications to [[https://github.com/jorgenschaefer/circe][Circe]].
+   - Won't send a notification unless the channel is in =tracking-buffers=,
+     i.e. not currently visible.
+   - Avoids getting spammed by one nickname if they are messaging you a lot.
+     After the first notification from some-user you will not get another
+     notification from them until =circe-notifications-wait-for= seconds have
+     elapsed.
+   - Optional list of nicknames or words which can trigger a notification.
+   - Optionally detects whether Emacs is focused by the window manager.  For
+     example, if you're reading some documentation in Firefox and Emacs is
+     hidden you may wish to receive notifications even for buffers that would be
+     visible in Emacs.  This feature requires X, xdotool and xprop.
+
+** Configuration
+
+#+begin_src emacs-lisp :tangle yes
+(require 'circe-notifications)
+(add-hook 'circe-server-connected-hook 'circe-notifications-enable)
+(setq circe-notifications-watch-nicks
+      '("people" "you" "like" "to" "hear" "from"))
+#+end_src
+
+If you use X you may wish to =(setq circe-notifications-check-window-focus t)=,
+although this depends on xorg-xprop and [[http://www.semicomplete.com/projects/xdotool/][xdotool]].
+
+If you like to use Emacs in a terminal emulator, it can detect that too provided
+that you =(setq circe-notifications-term-name "my-favourite-terminal")= and the
+terminal sets WM_NAME to something containing the string "emacs".
+
+** Caveats
+
+If you use the configuration above with something like ZNC you will endure a
+deluge of notifications upon buffer playback.
+
+Short of patching a new RPL code into both ZNC and Circe specifically for this,
+the only way to deal with it is to count occurrences of =(string-equal command
+"NOTICE")= and =(string-equal host "znc.in")= for each network on ZNC and
+=(add-hook 'circe-receive-message-functions 'circe-notifications)= after that.
+
+The number of notices depends on how many networks you are connecting to and
+how many lines are in ZNC's MOTD.  It's a massive kludge but here's how I do it.
+
+#+begin_src emacs-lisp :tangle yes
+;; Warning: this is very dumb
+;;
+;; ZNC's MOTD is 25 lines.
+;; I have two networks defined in `circe-network-options'.
+;; So wait to see 50 notices from ZNC before enabling notifications.
+
+(setq eqyiel-circe-znc-notices 0)
+
+(defun eqyiel-circe-wait-for-znc (nick user host command args)
+  (if (> 50 eqyiel-circe-znc-notices)
+      (when (and (string-equal host "znc.in")
+               (string-equal command "NOTICE"))
+        (message "That's %d ..." eqyiel-circe-znc-notices)
+        (setq eqyiel-circe-znc-notices (+ 1 eqyiel-circe-znc-notices)))
+    (progn
+      (message "OK.")
+      (remove-hook 'circe-receive-message-functions 'eqyiel-circe-wait-for-znc)
+      (circe-notifications-enable))))
+
+(defadvice circe-reconnect (before eqyiel-remove-circe-notifications)
+  (setq eqyiel-circe-znc-notices 0)
+  (remove-hook 'circe-receive-message-functions 'circe-notifications)
+  (add-hook 'circe-receive-message-functions 'eqyiel-circe-wait-for-znc))
+
+(add-hook 'circe-receive-message-functions 'eqyiel-circe-wait-for-znc)
+#+end_src
+
+Alternatively, you can =M-x circe-notifications-enable= after the buffer
+playback is done.
