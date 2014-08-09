@@ -36,6 +36,17 @@
   "A list of nicks in use according to `circe-network-options'.  It is generated
   by `circe-notifications-get-nicks-on-all-networks'.")
 
+(defcustom circe-notifications-terminal-notifier-command
+  (executable-find "terminal-notifier")
+  "The path to terminal-notifier.  For OSX users.")
+
+(defcustom circe-notifications-backend "dbus"
+  "One of `dbus' or `terminal-notifier'."
+  :type '(choice
+          (const :tag "Use dbus" "dbus")
+          (const :tag "Use terminal-notifier" "terminal-notifier"))
+  :group 'circe-notifications)
+
 (defcustom circe-notifications-wait-for 90
   "The number of seconds to wait before allowing some nick in
 `circe-notifications-wait-list' to trigger a notification again."
@@ -136,14 +147,22 @@ notification."
 
 (defun circe-notifications-notify (nick body)
   "Show a desktop notification with title NICK and body BODY."
-    (dbus-ignore-errors
-      (notifications-notify
-       :title (xml-escape-string nick)
-       :body (xml-escape-string body)
-       :timeout circe-notifications-timeout
-       :desktop-entry circe-notifications-desktop-entry
-       :sound-name circe-notifications-sound-name
-       :transient)))
+    (if (string-equal circe-notifications-backend "dbus")
+        (dbus-ignore-errors
+          (notifications-notify
+           :title (xml-escape-string nick)
+           :body (xml-escape-string body)
+           :timeout circe-notifications-timeout
+           :desktop-entry circe-notifications-desktop-entry
+           :sound-name circe-notifications-sound-name
+           :transient))
+      ;; otherwise use terminal-notifier
+      (start-process "terminal-notifier"
+                 "*terminal-notifier*"
+                 circe-notifications-terminal-notifier-command
+                 "-title" (xml-escape-string nick)
+                 "-message" (xml-escape-string body)
+                 "-activate" "org.gnu.Emacs")))
 
 (defun circe-not-getting-spammed-by (nick)
   "Return an alist with NICKs that have triggered notifications in the last
@@ -207,11 +226,16 @@ the last message from NICK.  If so, remove them from
               t
             nil))))))
 
-(defun circe-notifications-enable ()
+(defun enable-circe-notifications ()
   "Turn on notifications."
   (interactive)
   (circe-notifications-get-nicks-on-all-networks)
   (add-hook 'circe-receive-message-functions 'circe-notifications))
+
+(defun disable-circe-notifications ()
+  "Turn on notifications."
+  (interactive)
+  (remove-hook 'circe-receive-message-functions 'circe-notifications))
 
 (provide 'circe-notifications)
 ;;; circe-notifications.el ends here

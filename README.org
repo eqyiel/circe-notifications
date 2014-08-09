@@ -18,23 +18,45 @@ Julien Danjou's [[http://julien.danjou.info/blog/2012/erc-notifications][erc-des
    - Optionally detects whether Emacs is focused by the window manager.  For
      example, if you're reading some documentation in Firefox and Emacs is
      hidden you may wish to receive notifications even for buffers that would be
-     visible in Emacs.  This feature requires X, xdotool and xprop.
+     visible in Emacs.  This feature requires X11, =xdotool= and =xorg-xprop=.
+   - Works in OSX with =terminal-notifier=.
 
 ** Configuration
 
+*** GNU/Linux
 #+begin_src emacs-lisp :tangle yes
-(require 'circe-notifications)
-(add-hook 'circe-server-connected-hook 'circe-notifications-enable)
-(setq circe-notifications-watch-nicks
-      '("people" "you" "like" "to" "hear" "from"))
+(autoload 'enable-circe-notifications "circe-notifications" nil t)
+
+(eval-after-load "circe-notifications"
+  '(setq setq circe-notifications-watch-nicks
+      '("people" "you" "like" "to" "hear" "from")))
+
+(add-hook 'circe-server-connected-hook 'enable-circe-notifications)
 #+end_src
 
-If you use X you may wish to =(setq circe-notifications-check-window-focus t)=,
-although this depends on xorg-xprop and [[http://www.semicomplete.com/projects/xdotool/][xdotool]].
+If you use X11 you may wish to =(setq circe-notifications-check-window-focus
+t)=, although this depends on =xorg-xprop= and =xdotool=.
 
 If you like to use Emacs in a terminal emulator, it can detect that too provided
 that you =(setq circe-notifications-term-name "my-favourite-terminal")= and the
-terminal sets WM_NAME to something containing the string "emacs".
+terminal sets =WM_NAME= to something containing the string "emacs".
+
+*** OSX
+
+#+begin_src emacs-lisp :tangle yes
+(autoload 'enable-circe-notifications "circe-notifications" nil t)
+
+(eval-after-load "circe-notifications"
+  '(setq circe-notifications-watch-nicks
+         '("people" "you" "like" "to" "hear" "from")
+         circe-notifications-backend "terminal-notifier"))
+
+(add-hook 'circe-server-connected-hook 'enable-circe-notifications)
+#+end_src
+
+Some people asked me how to use this in OSX.  You can use Eloy Durán's
+=terminal-notifier= instead of =dbus=.  [[https://github.com/alloy/terminal-notifier][Get it here.]]  Note that you won't be
+able to use any of those tools that rely on X11.
 
 ** Caveats
 
@@ -56,18 +78,28 @@ how many lines are in ZNC's MOTD.  It's a massive kludge but here's how I do it.
 ;; I have two networks defined in `circe-network-options'.
 ;; So wait to see 50 notices from ZNC before enabling notifications.
 
-(setq eqyiel-circe-znc-notices 0)
+(defvar eqyiel-circe-znc-notices 0
+  "How many notices have we received from ZNC?")
+
+(defvar eqyiel-circe-znc-motd-length 25
+  "How many lines are in ZNC's MOTD?")
+
+(defun eqyiel-circe-znc-count-networks ()
+  "Return the number of networks in `circe-network-options' multiplied by
+`eqyiel-circe-znc-motd-length', so we can know how many notices to expect before
+enabling notifications."
+  (* eqyiel-circe-znc-motd-length (list-length circe-network-options)))
 
 (defun eqyiel-circe-wait-for-znc (nick user host command args)
-  (if (> 50 eqyiel-circe-znc-notices)
+  (if (> (eqyiel-circe-znc-count-networks) eqyiel-circe-znc-notices)
       (when (and (string-equal host "znc.in")
                (string-equal command "NOTICE"))
-        (message "That's %d ..." eqyiel-circe-znc-notices)
-        (setq eqyiel-circe-znc-notices (+ 1 eqyiel-circe-znc-notices)))
+        (setq eqyiel-circe-znc-notices (+ 1 eqyiel-circe-znc-notices))
+        (message "That's %d ..." eqyiel-circe-znc-notices))
     (progn
       (message "OK.")
       (remove-hook 'circe-receive-message-functions 'eqyiel-circe-wait-for-znc)
-      (circe-notifications-enable))))
+      (enable-circe-notifications))))
 
 (defadvice circe-reconnect (before eqyiel-remove-circe-notifications)
   (setq eqyiel-circe-znc-notices 0)
@@ -77,5 +109,5 @@ how many lines are in ZNC's MOTD.  It's a massive kludge but here's how I do it.
 (add-hook 'circe-receive-message-functions 'eqyiel-circe-wait-for-znc)
 #+end_src
 
-Alternatively, you can =M-x circe-notifications-enable= after the buffer
+Alternatively, you can =M-x enable-circe-notifications= after the buffer
 playback is done.
