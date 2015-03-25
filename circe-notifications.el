@@ -127,7 +127,8 @@ notification."
                (string-equal "PRIVMSG" command))
               (when
                   (cond ((dolist (n circe-notifications-nicks-on-all-networks)
-                           (if (string-match n body)
+                           (if (or (string-match n body)
+                                   (string-match n channel))
                                (return t))))
                         ((member-ignore-case
                           nick
@@ -136,7 +137,7 @@ notification."
                           user
                           circe-notifications-watch-nicks)))
                 (when (circe-not-getting-spammed-by nick)
-                  (circe-notifications-notify nick body)))
+                  (circe-notifications-notify nick channel body)))
             ;; someone we are watching JOINed, PARTed, QUIT or was KICKed
             (when (and
                    channel
@@ -148,7 +149,7 @@ notification."
                            circe-notifications-watch-nicks))))
               (when (circe-not-getting-spammed-by nick)
                 (circe-notifications-notify
-                 nick (concat command ": " channel))))))))))
+                 nick channel command)))))))))
 
 
 (defun growl (title message)
@@ -166,7 +167,7 @@ notification."
   t)
 
 
-(defun circe-notifications-notify (nick body)
+(defun circe-notifications-notify (nick channel body)
   "Show a desktop notification with title NICK and body BODY."
     (cond ((string-equal circe-notifications-backend "dbus")
            (dbus-ignore-errors
