@@ -49,7 +49,8 @@
   :type '(choice
           (const :tag "Use dbus" "dbus")
           (const :tag "Use terminal-notifier" "terminal-notifier")
-          (const :tag "Use growlnotify" "growlnotify"))
+          (const :tag "Use growlnotify" "growlnotify")
+          (const :tag "Use OS X Notifications" "osx-notifications"))
   :group 'circe-notifications)
 
 (defcustom circe-notifications-wait-for 90
@@ -167,6 +168,18 @@ notification."
   t)
 
 
+(defun osx-notify (title channel message)
+  "Shows a native os x notification using applescript"
+  (flet ((encfn (s) (encode-coding-string s (keyboard-coding-system))) )
+    (start-process "osascript" nil
+                   "osascript"
+                   "-e"
+                   (format "display notification \"%s\" with title \"%s\" subtitle \"%s\""
+                           (encfn message)
+                           (encfn title)
+                           (encfn channel)))
+    t))
+
 (defun circe-notifications-notify (nick channel body)
   "Show a desktop notification with title NICK and body BODY."
     (cond ((string-equal circe-notifications-backend "dbus")
@@ -179,9 +192,12 @@ notification."
               :sound-name circe-notifications-sound-name
               :transient)))
           ((string-equal circe-notifications-backend "growlnotify")
-           (message "growling")
            (growl (xml-escape-string nick)
                   (xml-escape-string body)))
+          ((string-equal circe-notifications-backend "osx-notifications")
+           (osx-notify (xml-escape-string nick)
+                       (xml-escape-string channel)
+                       (xml-escape-string body)))
           (t
            (start-process "terminal-notifier"
                           "*terminal-notifier*"
