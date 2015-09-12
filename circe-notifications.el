@@ -123,11 +123,11 @@ matches any of `circe-notifications-nicks-on-all-networks' or
         (if (cond ((dolist (n circe-notifications-nicks-on-all-networks)
                        (if (or (string-match n target)  ; Private message
                                (string-match n text))   ; Message to a channel
-                             (return t))))
+                             (cl-return t))))
                     ((dolist (n circe-notifications-watch-strings)
                        (if (or (string-match n nick)
                                (string-match n text))
-                             (return t)))))
+                             (cl-return t)))))
                      (circe-notifications-notify nick text))))))
 
 (defun circe-notifications-JOIN (nick userhost _command channel
@@ -146,7 +146,7 @@ notification."
                 ((not (circe-notifications-emacs-focused-p))))
       (when (circe-notifications-not-getting-spammed-by nick)
         (when (dolist (n circe-notifications-watch-strings)
-                       (if (string-match n nick) (return t)))
+                       (if (string-match n nick) (cl-return t)))
           (circe-notifications-notify nick (concat "/JOIN " channel)))))))
 
 (defun circe-notifications-QUIT (nick userhost _command
@@ -165,7 +165,7 @@ notification."
                 ((not (circe-notifications-emacs-focused-p))))
       (when (circe-notifications-not-getting-spammed-by nick)
         (when (dolist (n circe-notifications-watch-strings)
-                       (if (string-match n nick) (return t)))
+                       (if (string-match n nick) (cl-return t)))
           (circe-notifications-notify nick "/QUIT"))))))
 
 (defun circe-notifications-PART (nick userhost _command channel
@@ -184,7 +184,7 @@ notification."
                 ((not (circe-notifications-emacs-focused-p))))
       (when (circe-notifications-not-getting-spammed-by nick)
         (when (dolist (n circe-notifications-watch-strings)
-                       (if (string-match n nick) (return t)))
+                       (if (string-match n nick) (cl-return t)))
           (circe-notifications-notify
            nick (concat "/PART (" channel ")")))))))
 
