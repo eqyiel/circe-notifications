@@ -17,12 +17,13 @@ configuration snippet, and Julien Danjou's
      After the first notification from some-user you will not get another
      notification from them until =circe-notifications-wait-for= seconds have
      elapsed.
-   - Optional list of nicknames or words which can trigger a notification.
+   - Optional list of strings which can trigger a notification.
    - Optionally detects whether Emacs is focused by the window manager.  For
      example, if you're reading some documentation in Firefox and Emacs is
      hidden you may wish to receive notifications even for buffers that would be
-     visible in Emacs.  This feature requires X11, =xdotool= and =xorg-xprop=.
-   - Works in OSX with =terminal-notifier=.
+     visible in Emacs.  This feature requires either both =xdotool= and
+     =xorg-xprop= or OSX.
+   - Works in OSX with =growlnotify=, =osascript= or =terminal-notifier=.
 
 ** Configuration
 
@@ -37,12 +38,13 @@ configuration snippet, and Julien Danjou's
 (add-hook 'circe-server-connected-hook 'enable-circe-notifications)
 #+end_src
 
-If you use X11 you may wish to =(setq circe-notifications-check-window-focus
-t)=, although this depends on =xorg-xprop= and =xdotool=.
+Uses =dbus= to connect to your DE/WM's particular notification system.
 
-If you like to use Emacs in a terminal emulator, it can detect that too provided
-that you =(setq circe-notifications-term-name "my-favourite-terminal")= and the
-terminal sets =WM_NAME= to something containing the string "emacs".
+If you like to use Emacs in a terminal emulator and that terminal sets =WM_NAME=
+to something containing the string "emacs" you may wish to =(setq
+circe-notifications-term-name "my-favourite-terminal")= so that
+=circe-notifications-emacs-focused-p= will recognise Emacs running in that
+terminal emulator.  This particular feature depends on =xdotool= and =xprop=.
 
 *** OSX
 
@@ -57,10 +59,9 @@ terminal sets =WM_NAME= to something containing the string "emacs".
 (add-hook 'circe-server-connected-hook 'enable-circe-notifications)
 #+end_src
 
-Some people asked me how to use this in OSX.  You can use Eloy Durán's
-=terminal-notifier= instead of =dbus=.
-[[https://github.com/alloy/terminal-notifier][Get it here.]]  Note that you
-won't be able to use any of those tools that rely on X11.
+When =(string-equal system-type "darwin")= , =circe-notifications-backend= will
+automagically be set to =osascript=, but there is also support for =growlnotify=
+and [[https://github.com/alloy/terminal-notifier][terminal-notifier]].
 
 ** Caveats
 
