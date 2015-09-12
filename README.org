@@ -2,12 +2,15 @@
 
 [[./screenshot.png]]
 
-Inspired by [[https://github.com/tomterl][tomterl]] on =#emacs-circe= who posted [[https://github.com/jorgenschaefer/circe/wiki/Configuration#tracking-send-desktop-notifications-on-buffer-activity][this]] configuration snippet, and
-Julien Danjou's [[http://julien.danjou.info/blog/2012/erc-notifications][erc-desktop-notifications]].
+Inspired by [[https://github.com/tomterl][tomterl]] on =#emacs-circe= who posted
+[[https://github.com/jorgenschaefer/circe/wiki/Configuration#tracking-send-desktop-notifications-on-buffer-activity][this]]
+configuration snippet, and Julien Danjou's
+[[http://julien.danjou.info/blog/2012/erc-notifications][erc-desktop-notifications]].
 
 ** Features
 
-   - Adds desktop notifications to [[https://github.com/jorgenschaefer/circe][Circe]].
+   - Adds desktop notifications to
+     [[https://github.com/jorgenschaefer/circe][Circe]].
    - Won't send a notification unless the channel is in =tracking-buffers=,
      i.e. not currently visible.
    - Avoids getting spammed by one nickname if they are messaging you a lot.
@@ -28,7 +31,7 @@ Julien Danjou's [[http://julien.danjou.info/blog/2012/erc-notifications][erc-des
 (autoload 'enable-circe-notifications "circe-notifications" nil t)
 
 (eval-after-load "circe-notifications"
-  '(setq setq circe-notifications-watch-nicks
+  '(setq setq circe-notifications-watch-strings
       '("people" "you" "like" "to" "hear" "from")))
 
 (add-hook 'circe-server-connected-hook 'enable-circe-notifications)
@@ -47,7 +50,7 @@ terminal sets =WM_NAME= to something containing the string "emacs".
 (autoload 'enable-circe-notifications "circe-notifications" nil t)
 
 (eval-after-load "circe-notifications"
-  '(setq circe-notifications-watch-nicks
+  '(setq circe-notifications-watch-strings
          '("people" "you" "like" "to" "hear" "from")
          circe-notifications-backend "terminal-notifier"))
 
@@ -55,8 +58,9 @@ terminal sets =WM_NAME= to something containing the string "emacs".
 #+end_src
 
 Some people asked me how to use this in OSX.  You can use Eloy Durán's
-=terminal-notifier= instead of =dbus=.  [[https://github.com/alloy/terminal-notifier][Get it here.]]  Note that you won't be
-able to use any of those tools that rely on X11.
+=terminal-notifier= instead of =dbus=.
+[[https://github.com/alloy/terminal-notifier][Get it here.]]  Note that you
+won't be able to use any of those tools that rely on X11.
 
 ** Caveats
 
@@ -68,8 +72,10 @@ the only way to deal with it is to count occurrences of =(string-equal command
 "NOTICE")= and =(string-equal host "znc.in")= for each network on ZNC and
 =(add-hook 'circe-receive-message-functions 'circe-notifications)= after that.
 
-The number of notices depends on how many networks you are connecting to and
-how many lines are in ZNC's MOTD.  It's a massive kludge but here's how I do it.
+The number of notices depends on how many networks you are connecting to and how
+many lines are in ZNC's MOTD.  It's a massive kludge but here's how I do it.
+Replace the line =(add-hook 'circe-server-connected-hook
+'enable-circe-notifications)= with this:
 
 #+begin_src emacs-lisp :tangle yes
 ;; Warning: this is very dumb
@@ -88,25 +94,35 @@ how many lines are in ZNC's MOTD.  It's a massive kludge but here's how I do it.
   "Return the number of networks in `circe-network-options' multiplied by
 `eqyiel-circe-znc-motd-length', so we can know how many notices to expect before
 enabling notifications."
-  (* eqyiel-circe-znc-motd-length (list-length circe-network-options)))
+  (* eqyiel-circe-znc-motd-length (length circe-network-options)))
 
-(defun eqyiel-circe-wait-for-znc (nick user host command args)
-  (if (> (eqyiel-circe-znc-count-networks) eqyiel-circe-znc-notices)
-      (when (and (string-equal host "znc.in")
-               (string-equal command "NOTICE"))
-        (setq eqyiel-circe-znc-notices (+ 1 eqyiel-circe-znc-notices))
-        (message "That's %d ..." eqyiel-circe-znc-notices))
-    (progn
+(defun eqyiel-circe-wait-for-znc (nick userhost _command target text)
+  "If this TEXT from NICK and USERHOST looks like a line of ZNC's MOTD,
+increment `eqyiel-circe-znc-notices', and enable notifications if there have
+been at least `eqyiel-circe-znc-count-networks' `eqyiel-circe-znc-notices'."
+  (when (and (string-equal nick "*status")
+             (string-equal userhost "znc@znc.in"))
+    (setq eqyiel-circe-znc-notices (+ 1 eqyiel-circe-znc-notices))
+    (message "That's %d ..." eqyiel-circe-znc-notices)
+    (when (<= (eqyiel-circe-znc-count-networks) eqyiel-circe-znc-notices)
       (message "OK.")
-      (remove-hook 'circe-receive-message-functions 'eqyiel-circe-wait-for-znc)
+      (advice-remove 'circe-display-NOTICE 'eqyiel-circe-wait-for-znc)
       (enable-circe-notifications))))
 
-(defadvice circe-reconnect (before eqyiel-remove-circe-notifications)
-  (setq eqyiel-circe-znc-notices 0)
-  (remove-hook 'circe-receive-message-functions 'circe-notifications)
-  (add-hook 'circe-receive-message-functions 'eqyiel-circe-wait-for-znc))
+(defun eqyiel-enable-circe-notifications ()
+  (interactive)
+  (advice-add 'circe-display-NOTICE :after 'eqyiel-circe-wait-for-znc)
+  (advice-add 'circe-reconnect-all :before
+              'eqyiel-disable-circe-notifications))
 
-(add-hook 'circe-receive-message-functions 'eqyiel-circe-wait-for-znc)
+(eval-after-load 'circe
+  '(eqyiel-enable-circe-notifications))
+
+(defun eqyiel-disable-circe-notifications ()
+  (interactive)
+  (disable-circe-notifications)
+  (setq eqyiel-circe-znc-notices 0)
+  (advice-add 'circe-display-NOTICE :after 'eqyiel-circe-wait-for-znc))
 #+end_src
 
 Alternatively, you can =M-x enable-circe-notifications= after the buffer
