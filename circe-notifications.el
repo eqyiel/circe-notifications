@@ -1,6 +1,6 @@
-;;; circe-notifications.el
+;;; circe-notifications.el --- Add desktop notifications to Circe.
 
-;; Copyright (C) 2014 Ruben Maher
+;; Copyright (C) 2014 - 2015 Ruben Maher
 
 ;; Author: Ruben Maher <r@rkm.id.au>
 ;; URL: https://code.rkm.id.au/circe-notifications
@@ -18,10 +18,13 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+;;; Code:
+
 (require 'circe)
-(require 'xml)
+(require 'cl-macs)
 (require 'dbus)
 (require 'notifications)
+(require 'xml)
 
 (defgroup circe-notifications nil
   "Add desktop notifications to Circe."
@@ -34,7 +37,7 @@
 
 (defvar circe-notifications-nicks-on-all-networks nil
   "A list of nicks in use according to `circe-network-options'.  It is generated
-  by `circe-notifications-get-nicks-on-all-networks'.")
+by `circe-notifications-get-nicks-on-all-networks'.")
 
 (defcustom circe-notifications-terminal-notifier-command
   (executable-find "terminal-notifier")
@@ -98,73 +101,113 @@ positives."
   :type 'integer
   :group 'circe-notifications)
 
-(defun circe-notifications (nick user host command args)
-  "Unless NICK is being ignored:
-
-If ARGS, NICK or USER contains any of
-`circe-notifications-nicks-on-all-networks' or
-`circe-notifications-watch-nicks', if either channel (car ARGS) is in
-`tracking-buffers' (i.e., not currently visible) or Emacs is not currently
+(defun circe-notifications-PRIVMSG (nick userhost _command target text)
+  "If NICK is not in either `circe-ignore-list' or `circe-fool-list' (only
+applicable if `lui-fools-hidden-p'), NICK or TARGET is either in
+`tracking-buffers' \(i.e., not currently visible) or Emacs is not currently
 focused by the window manager (detected if
-`circe-notifications-check-window-focus' is true), and NICK has not triggered a
-notification in the last `circe-notifications-wait-for' seconds, show a desktop
+`circe-notifications-check-window-focus' is true), NICK has not triggered a
+notification in the last `circe-notifications-wait-for' seconds and NICK or TEXT
+matches any of `circe-notifications-nicks-on-all-networks' or
+`circe-notifications-watch-nicks', show a desktop notification."
+  (unless (cond ((member nick circe-ignore-list))
+                ((and (member nick circe-fool-list)
+                      (lui-fools-hidden-p))))
+    ;; Checking `tracking-buffers' has the benefit of excluding
+    ;; `tracking-ignored-buffers'.  Also if a channel is in `tracking-buffers',
+    ;; it is not currently focused by Emacs.
+    (when (cond ((member nick tracking-buffers))   ; Private message
+                ((member target tracking-buffers)) ; Message to a channel
+                ((not (circe-notifications-emacs-focused-p))))
+      (when (circe-notifications-not-getting-spammed-by nick)
+        (if (cond ((dolist (n circe-notifications-nicks-on-all-networks)
+                       (if (or (string-match n target)  ; Private message
+                               (string-match n text))   ; Message to a channel
+                             (return t))))
+                    ((dolist (n circe-notifications-watch-nicks)
+                       (if (or (string-match n nick)
+                               (string-match n text))
+                             (return t)))))
+                     (circe-notifications-notify nick text))))))
+
+(defun circe-notifications-JOIN (nick userhost _command channel
+                                      &optional accountname realname)
+  "If NICK is not in either `circe-ignore-list' or `circe-fool-list' (only
+applicable if `lui-fools-hidden-p'), CHANNEL is either in `tracking-buffers'
+\(i.e., not currently visible) or Emacs is not currently focused by the window
+manager (detected if `circe-notifications-check-window-focus' is true), NICK has
+not triggered a notification in the last `circe-notifications-wait-for' seconds
+and NICK matches any of `circe-notifications-watch-nicks', show a desktop
 notification."
-  (unless
-      (cond ((circe-fool-p nick user host command args))
-            ((circe-ignored-p nick user host command args)))
-    (let ((body (cadr args))
-          (channel (car args)))
-      (ignore-errors ;; ignores server ping messages which have no NICK or USER
-        (when (or (member channel tracking-buffers)
-                  (not (circe-notifications-emacs-focused-p)))
-          (if (and
-               body
-               (string-equal "PRIVMSG" command))
-              (when
-                  (cond ((dolist (n circe-notifications-nicks-on-all-networks)
-                           (if (string-match n body)
-                               (return t))))
-                        ((member-ignore-case
-                          nick
-                          circe-notifications-watch-nicks))
-                        ((member-ignore-case
-                          user
-                          circe-notifications-watch-nicks)))
-                (when (circe-not-getting-spammed-by nick)
-                  (circe-notifications-notify nick body)))
-            ;; someone we are watching JOINed, PARTed, QUIT or was KICKed
-            (when (and
-                   channel
-                   (cond ((member-ignore-case
-                           nick
-                           circe-notifications-watch-nicks))
-                         ((member-ignore-case
-                           user
-                           circe-notifications-watch-nicks))))
-              (when (circe-not-getting-spammed-by nick)
-                (circe-notifications-notify
-                 nick (concat command ": " channel))))))))))
+  (unless (cond ((member nick circe-ignore-list))
+                ((and (member nick circe-fool-list)
+                      (lui-fools-hidden-p))))
+    (when (cond ((member channel tracking-buffers))
+                ((not (circe-notifications-emacs-focused-p))))
+      (when (circe-notifications-not-getting-spammed-by nick)
+        (when (dolist (n circe-notifications-watch-nicks)
+                       (if (string-match n nick) (return t)))
+          (circe-notifications-notify nick (concat "/JOIN " channel)))))))
+
+(defun circe-notifications-QUIT (nick userhost _command
+                                      &optional channel reason)
+  "If NICK is not in either `circe-ignore-list' or `circe-fool-list' (only
+applicable if `lui-fools-hidden-p'), CHANNEL is either in `tracking-buffers'
+\(i.e., not currently visible) or Emacs is not currently focused by the window
+manager (detected if `circe-notifications-check-window-focus' is true), NICK has
+not triggered a notification in the last `circe-notifications-wait-for' seconds
+and NICK matches any of `circe-notifications-watch-nicks', show a desktop
+notification."
+  (unless (cond ((member nick circe-ignore-list))
+                ((and (member nick circe-fool-list)
+                      (lui-fools-hidden-p))))
+    (when (cond ((member channel tracking-buffers))
+                ((not (circe-notifications-emacs-focused-p))))
+      (when (circe-notifications-not-getting-spammed-by nick)
+        (when (dolist (n circe-notifications-watch-nicks)
+                       (if (string-match n nick) (return t)))
+          (circe-notifications-notify nick "/QUIT"))))))
+
+(defun circe-notifications-PART (nick userhost _command channel
+                                      &optional reason)
+  "If NICK is not in either `circe-ignore-list' or `circe-fool-list' (only
+applicable if `lui-fools-hidden-p'), CHANNEL is either in `tracking-buffers'
+\(i.e., not currently visible) or Emacs is not currently focused by the window
+manager (detected if `circe-notifications-check-window-focus' is true), NICK has
+not triggered a notification in the last `circe-notifications-wait-for' seconds
+and NICK matches any of `circe-notifications-watch-nicks', show a desktop
+notification."
+  (unless (cond ((member nick circe-ignore-list))
+                ((and (member nick circe-fool-list)
+                      (lui-fools-hidden-p))))
+    (when (cond ((member channel tracking-buffers))
+                ((not (circe-notifications-emacs-focused-p))))
+      (when (circe-notifications-not-getting-spammed-by nick)
+        (when (dolist (n circe-notifications-watch-nicks)
+                       (if (string-match n nick) (return t)))
+          (circe-notifications-notify
+           nick (concat "/PART (" channel ")")))))))
 
 (defun circe-notifications-notify (nick body)
   "Show a desktop notification with title NICK and body BODY."
-    (if (string-equal circe-notifications-backend "dbus")
-        (dbus-ignore-errors
-          (notifications-notify
-           :title (xml-escape-string nick)
-           :body (xml-escape-string body)
-           :timeout circe-notifications-timeout
-           :desktop-entry circe-notifications-desktop-entry
-           :sound-name circe-notifications-sound-name
-           :transient))
-      ;; otherwise use terminal-notifier
-      (start-process "terminal-notifier"
-                 "*terminal-notifier*"
-                 circe-notifications-terminal-notifier-command
-                 "-title" (xml-escape-string nick)
-                 "-message" (xml-escape-string body)
-                 "-activate" "org.gnu.Emacs")))
+  (if (string-equal circe-notifications-backend "dbus")
+      (dbus-ignore-errors
+        (notifications-notify
+         :title (xml-escape-string nick)
+         :body (xml-escape-string body)
+         :timeout circe-notifications-timeout
+         :desktop-entry circe-notifications-desktop-entry
+         :sound-name circe-notifications-sound-name
+         :transient))
+    ;; otherwise use terminal-notifier
+    (start-process "terminal-notifier"
+                   "*terminal-notifier*"
+                   circe-notifications-terminal-notifier-command
+                   "-title" (xml-escape-string nick)
+                   "-message" (xml-escape-string body)
+                   "-activate" "org.gnu.Emacs")))
 
-(defun circe-not-getting-spammed-by (nick)
+(defun circe-notifications-not-getting-spammed-by (nick)
   "Return an alist with NICKs that have triggered notifications in the last
 `circe-notifications-wait-for' seconds, or nil if it has been less than
 `circe-notifications-wait-for' seconds since the last notification from NICK."
@@ -189,19 +232,19 @@ the last message from NICK.  If so, remove them from
                     (assoc nick circe-notifications-wait-list)
                     circe-notifications-wait-list))
              ;; add NICK to the waitlist again
-             (circe-not-getting-spammed-by nick)))))
+             (circe-notifications-not-getting-spammed-by nick)))))
 
 (defun circe-notifications-get-nicks-on-all-networks ()
   "Get a list of all nicks in use according to `circe-network-options'."
   (let ((x 0))
-    (while (< x (list-length circe-network-options))
+    (while (< x (length circe-network-options))
       (add-to-list 'circe-notifications-nicks-on-all-networks
                    (nth 2 (nth x circe-network-options)))
       (setq x (+ 1 x)))))
 
 
 (defun circe-notifications-has-x-tools-p ()
-  "True if $DISPLAY is set and both xdotool and xprop are installed.'"
+  "True if $DISPLAY is set and both xdotool and xprop are installed."
   (if (and (< 0 (string-width (shell-command-to-string "echo $DISPLAY")))
            (executable-find "xdotool")
            (executable-find "xprop"))
@@ -230,12 +273,18 @@ the last message from NICK.  If so, remove them from
   "Turn on notifications."
   (interactive)
   (circe-notifications-get-nicks-on-all-networks)
-  (add-hook 'circe-receive-message-functions 'circe-notifications))
+  (advice-add 'circe-display-PRIVMSG :after 'circe-notifications-PRIVMSG)
+  (advice-add 'circe-display-channel-quit :after 'circe-notifications-QUIT)
+  (advice-add 'circe-display-JOIN :after 'circe-notifications-JOIN)
+  (advice-add 'circe-display-PART :after 'circe-notifications-PART))
 
 (defun disable-circe-notifications ()
   "Turn on notifications."
   (interactive)
-  (remove-hook 'circe-receive-message-functions 'circe-notifications))
+  (advice-remove 'circe-display-PRIVMSG 'circe-notifications-PRIVMSG)
+  (advice-remove 'circe-display-channel-quit 'circe-notifications-QUIT)
+  (advice-remove 'circe-display-JOIN 'circe-notifications-JOIN)
+  (advice-remove 'circe-display-PART 'circe-notifications-PART))
 
 (provide 'circe-notifications)
 ;;; circe-notifications.el ends here
