@@ -56,9 +56,9 @@ by `circe-notifications-get-nicks-on-all-networks'.")
   :type 'integer
   :group 'circe-notifications)
 
-(defcustom circe-notifications-watch-nicks nil
-  "A list of nicknames or words which can trigger a notification.  You don't
-need to put your nick here, it is added automagically by
+(defcustom circe-notifications-watch-strings nil
+  "A list of strings which can trigger a notification.  You don't need to put
+your nick here, it is added automagically by
 `circe-notifications-nicks-on-all-networks' when it checks the values in
 `circe-network-options'."
   :type '(repeat string)
@@ -109,7 +109,7 @@ focused by the window manager (detected if
 `circe-notifications-check-window-focus' is true), NICK has not triggered a
 notification in the last `circe-notifications-wait-for' seconds and NICK or TEXT
 matches any of `circe-notifications-nicks-on-all-networks' or
-`circe-notifications-watch-nicks', show a desktop notification."
+`circe-notifications-watch-strings', show a desktop notification."
   (unless (cond ((member nick circe-ignore-list))
                 ((and (member nick circe-fool-list)
                       (lui-fools-hidden-p))))
@@ -124,7 +124,7 @@ matches any of `circe-notifications-nicks-on-all-networks' or
                        (if (or (string-match n target)  ; Private message
                                (string-match n text))   ; Message to a channel
                              (return t))))
-                    ((dolist (n circe-notifications-watch-nicks)
+                    ((dolist (n circe-notifications-watch-strings)
                        (if (or (string-match n nick)
                                (string-match n text))
                              (return t)))))
@@ -137,7 +137,7 @@ applicable if `lui-fools-hidden-p'), CHANNEL is either in `tracking-buffers'
 \(i.e., not currently visible) or Emacs is not currently focused by the window
 manager (detected if `circe-notifications-check-window-focus' is true), NICK has
 not triggered a notification in the last `circe-notifications-wait-for' seconds
-and NICK matches any of `circe-notifications-watch-nicks', show a desktop
+and NICK matches any of `circe-notifications-watch-strings', show a desktop
 notification."
   (unless (cond ((member nick circe-ignore-list))
                 ((and (member nick circe-fool-list)
@@ -145,7 +145,7 @@ notification."
     (when (cond ((member channel tracking-buffers))
                 ((not (circe-notifications-emacs-focused-p))))
       (when (circe-notifications-not-getting-spammed-by nick)
-        (when (dolist (n circe-notifications-watch-nicks)
+        (when (dolist (n circe-notifications-watch-strings)
                        (if (string-match n nick) (return t)))
           (circe-notifications-notify nick (concat "/JOIN " channel)))))))
 
@@ -156,7 +156,7 @@ applicable if `lui-fools-hidden-p'), CHANNEL is either in `tracking-buffers'
 \(i.e., not currently visible) or Emacs is not currently focused by the window
 manager (detected if `circe-notifications-check-window-focus' is true), NICK has
 not triggered a notification in the last `circe-notifications-wait-for' seconds
-and NICK matches any of `circe-notifications-watch-nicks', show a desktop
+and NICK matches any of `circe-notifications-watch-strings', show a desktop
 notification."
   (unless (cond ((member nick circe-ignore-list))
                 ((and (member nick circe-fool-list)
@@ -164,7 +164,7 @@ notification."
     (when (cond ((member channel tracking-buffers))
                 ((not (circe-notifications-emacs-focused-p))))
       (when (circe-notifications-not-getting-spammed-by nick)
-        (when (dolist (n circe-notifications-watch-nicks)
+        (when (dolist (n circe-notifications-watch-strings)
                        (if (string-match n nick) (return t)))
           (circe-notifications-notify nick "/QUIT"))))))
 
@@ -175,7 +175,7 @@ applicable if `lui-fools-hidden-p'), CHANNEL is either in `tracking-buffers'
 \(i.e., not currently visible) or Emacs is not currently focused by the window
 manager (detected if `circe-notifications-check-window-focus' is true), NICK has
 not triggered a notification in the last `circe-notifications-wait-for' seconds
-and NICK matches any of `circe-notifications-watch-nicks', show a desktop
+and NICK matches any of `circe-notifications-watch-strings', show a desktop
 notification."
   (unless (cond ((member nick circe-ignore-list))
                 ((and (member nick circe-fool-list)
@@ -183,7 +183,7 @@ notification."
     (when (cond ((member channel tracking-buffers))
                 ((not (circe-notifications-emacs-focused-p))))
       (when (circe-notifications-not-getting-spammed-by nick)
-        (when (dolist (n circe-notifications-watch-nicks)
+        (when (dolist (n circe-notifications-watch-strings)
                        (if (string-match n nick) (return t)))
           (circe-notifications-notify
            nick (concat "/PART (" channel ")")))))))
