@@ -69,14 +69,14 @@ If you use the configuration above with something like ZNC you will endure a
 deluge of notifications upon buffer playback.
 
 Short of patching a new RPL code into both ZNC and Circe specifically for this,
-the only way to deal with it is to count occurrences of =(string-equal command
-"NOTICE")= and =(string-equal host "znc.in")= for each network on ZNC and
-=(add-hook 'circe-receive-message-functions 'circe-notifications)= after that.
+the only way to deal with it is to compare the number of notices received from
+ZNC so far to the number of notices you expect to receive from ZNC.
 
 The number of notices depends on how many networks you are connecting to and how
 many lines are in ZNC's MOTD.  It's a massive kludge but here's how I do it.
 Replace the line =(add-hook 'circe-server-connected-hook
-'enable-circe-notifications)= with this:
+'enable-circe-notifications)= from the configuration snippet above with
+something like this:
 
 #+begin_src emacs-lisp :tangle yes
 ;; Warning: this is very dumb
