@@ -6,6 +6,7 @@ Inspired by [[https://github.com/tomterl][tomterl]] on =#emacs-circe= who posted
 [[https://github.com/jorgenschaefer/circe/wiki/Configuration#tracking-send-desktop-notifications-on-buffer-activity][this]]
 configuration snippet, and Julien Danjou's
 [[http://julien.danjou.info/blog/2012/erc-notifications][erc-desktop-notifications]].
+Requires Circe >= 2.0.
 
 ** Features
 
