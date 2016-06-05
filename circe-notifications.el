@@ -285,6 +285,7 @@ the last message from NICK?"
                t
              nil)))))
 
+;;;###autoload
 (defun enable-circe-notifications ()
   "Turn on notifications."
   (interactive)
@@ -297,7 +298,7 @@ the last message from NICK?"
   (advice-add 'circe-display-PART :after 'circe-notifications-PART))
 
 (defun disable-circe-notifications ()
-  "Turn on notifications."
+  "Turn off notifications."
   (interactive)
   (setq circe-notifications-wait-list nil
         circe-notifications-watch-strings nil)
