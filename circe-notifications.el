@@ -4,6 +4,7 @@
 
 ;; Author: Ruben Maher <r@rkm.id.au>
 ;; URL: https://code.rkm.id.au/circe-notifications
+;; Package-Requires: ((emacs "24.4") (circe "2.3") (s "1.11.0"))
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
