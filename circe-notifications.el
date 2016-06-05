@@ -3,8 +3,8 @@
 ;; Copyright (C) 2014 - 2016 Ruben Maher
 
 ;; Author: Ruben Maher <r@rkm.id.au>
-;; URL: https://code.rkm.id.au/circe-notifications
-;; Package-Requires: ((emacs "24.4") (circe "2.3") (s "1.11.0"))
+;; URL: https://github.com/eqyiel/circe-notifications
+;; Package-Requires: ((emacs "24.4") (circe "2.3"))
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -22,45 +22,47 @@
 ;;; Contributors:
 
 ;; Michael McCracken <michael.mccracken@gmail.com>
+;; Syohei YOSHIDA <syohex@gmail.com>
+;; Steve Purcell <steve@sanityinc.com>
 
 ;;; Code:
 
 (require 'circe)
-(require 'dbus)
-(require 'notifications)
-(require 's)
-(require 'xml)
+(require 'alert)
 
 (defgroup circe-notifications nil
   "Add desktop notifications to Circe."
   :prefix "circe-notifications-"
   :group 'circe)
 
+(defvar circe-notifications-emacs-focused nil
+  "True if Emacs is currently focused by the window manager.")
+
 (defvar circe-notifications-wait-list nil
   "An alist of nicks that have triggered notifications in the last
 `circe-notifications-wait-for' seconds.")
 
-(defcustom circe-notifications-growlnotify-command
-  (executable-find "growlnotify")
-  "The path to growlnotify.  For OSX users.")
+(defcustom circe-notifications-alert-style 'libnotify
+  "`alert' style to use.  See `alert-styles' for a list of possibilities.  You
+can also define your own."
+  :type 'symbol
+  :group 'circe-notifications)
 
-(defcustom circe-notifications-osascript-command
-  (executable-find "osascript")
-  "The path to osascript.  For OSX users.")
+(defcustom circe-notifications-alert-severity 'normal
+  "Severity of a notification.  Will be passed to `alert'."
+  :type 'symbol
+  :group 'circe-notifications)
 
-(defcustom circe-notifications-terminal-notifier-command
-  (executable-find "terminal-notifier")
-  "The path to terminal-notifier.  For OSX users.")
+(defcustom circe-notifications-alert-icon alert-default-icon
+  "Icon to use for notifications."
+  :type 'string
+  :group 'circe-notifications)
 
-(defcustom circe-notifications-backend
-  (or (if (string-equal system-type "darwin") "osascript") "dbus")
-  "Which notifications backend to use.  One of `dbus', `growlnotify',
-`osascript' or `terminal-notifier'."
-  :type '(choice
-          (const :tag "Use dbus" "dbus")
-          (const :tag "Use growlnotify" "growlnotify")
-          (const :tag "Use osascript" "osascript")
-          (const :tag "Use terminal-notifier" "terminal-notifier"))
+(defcustom circe-notifications-notify-function nil
+  "If you can't get the level of customization you want with `alert', set this
+to your own notification function.  Will be called with three arguments: NICK,
+BODY and CHANNEL.  Leave nil to use the default."
+  :type 'function
   :group 'circe-notifications)
 
 (defcustom circe-notifications-wait-for 90
@@ -78,37 +80,9 @@ your nick here, it is added automagically by
   :group 'circe-notifications)
 
 (defcustom circe-notifications-check-window-focus t
-  "Enable use of external tools to check if Emacs is focused by the window
-manager.  Tries to use xprop and xdotool if they are available, or if
-`system-type' is \"darwin\" it will use `circe-notifications-osascript-command'.
-
-xprop and xdotool may detect Emacs running in a terminal emulator as long as
-that terminal emulator is capable of setting WM_NAME and
-`circe-notifications-term-name' is set."
+  "If true, disable notifications for visible buffers if Emacs is currently
+focused by the window manager."
   :type 'boolean
-  :group 'circe-notifications)
-
-(defcustom circe-notifications-term-name "xterm"
-  "The name of the terminal you will run Emacs in (if any).  If you are unsure
-check the value of WM_CLASS with xprop.  This is necessary to prevent false
-positives."
-  :type 'string
-  :group 'circe-notifications)
-
-(defcustom circe-notifications-desktop-entry
-  (concat "emacs" (int-to-string emacs-major-version))
-  "Icon to use for notifications."
-  :type 'file
-  :group 'circe-notifications)
-
-(defcustom circe-notifications-sound-name "message-new-entry"
-  "Sound to use for notifications."
-  :type 'file
-  :group 'circe-notifications)
-
-(defcustom circe-notifications-timeout 1000
-  "How long the notification should be displayed for (milliseconds)."
-  :type 'integer
   :group 'circe-notifications)
 
 (defun circe-notifications-PRIVMSG (nick userhost _command target text)
@@ -148,12 +122,14 @@ notification."
     ;; it is not currently focused by Emacs.
     (when (cond ((or (member channel tracking-buffers) ;; message to a channel
                      (member nick tracking-buffers))) ;; private message
-                ((not (circe-notifications-emacs-focused-p))))
+                ((and circe-notifications-check-window-focus
+                      (not circe-notifications-emacs-focused))))
       (when (circe-notifications-not-getting-spammed-by nick)
         (when (catch 'return
                 (dolist (n circe-notifications-watch-strings)
                   (when (or (string-match n nick)
-                            (string-match n body))
+                            (string-match n body)
+                            (string-match n channel))
                     (throw 'return t))))
           (progn
             (if (assoc nick circe-notifications-wait-list)
@@ -164,57 +140,18 @@ notification."
                             (list (cons nick (float-time))))))
             t))))))
 
-(defun circe-notifications-notify (nick body &optional channel)
+(defun circe-notifications-notify (nick body channel)
   "Show a desktop notification from NICK with BODY."
-  (cond ((string-equal circe-notifications-backend "dbus")
-         (dbus-ignore-errors
-           (notifications-notify
-            :title (xml-escape-string nick)
-            :body (xml-escape-string body)
-            :timeout circe-notifications-timeout
-            :desktop-entry circe-notifications-desktop-entry
-            :sound-name circe-notifications-sound-name
-            :transient)))
-        ((string-equal circe-notifications-backend "growlnotify")
-         (let* ((process
-                 (start-process
-                  "growlnotify" nil
-                  circe-notifications-growlnotify-command
-                  (encode-coding-string
-                   (xml-escape-string nick)
-                   (keyboard-coding-system))
-                  "-a" "Emacs"
-                  "-n" "Circe IRC")))
-           (process-send-string
-            process (encode-coding-string
-                     (xml-escape-string body)
-                     (keyboard-coding-system)))
-           (process-send-string process "\n")
-           (process-send-eof process)))
-        ((string-equal circe-notifications-backend "osascript")
-         (start-process
-          "osascript" nil
-          circe-notifications-osascript-command
-          "-e"
-          (format
-           (concat "display notification \"%s\" with"
-                   " title \"%s\" subtitle \"%s\"")
-           (encode-coding-string
-            (xml-escape-string body)
-            (keyboard-coding-system))
-           (encode-coding-string
-            (xml-escape-string nick)
-            (keyboard-coding-system))
-           (encode-coding-string
-            (xml-escape-string channel)
-            (keyboard-coding-system)))))
-        ((string-equal circe-notifications-backend "terminal-notifier")
-         (start-process "terminal-notifier" nil
-                        circe-notifications-terminal-notifier-command
-                        "-title" (xml-escape-string nick)
-                        "-message" (xml-escape-string body)
-                        "-activate" "org.gnu.Emacs"))
-        (t nil)))
+  (if (and circe-notifications-notify-function
+           (functionp circe-notifications-notify-function))
+      (funcall circe-notifications-notify-function
+               nick body channel)
+    (alert
+     body
+     :severity circe-notifications-alert-severity
+     :title nick
+     :icon circe-notifications-alert-icon
+     :style circe-notifications-alert-style)))
 
 (defun circe-notifications-not-getting-spammed-by (nick)
   "Return an alist with NICKs that have triggered notifications in the last
@@ -247,44 +184,11 @@ the last message from NICK?"
       (setq x (+ 1 x)))
     nicks))
 
-(defun circe-notifications-has-x-tools-p ()
-  "True if $DISPLAY is set and both xdotool and xprop are installed."
-  (if (and (< 0 (string-width (shell-command-to-string "echo $DISPLAY")))
-           (executable-find "xdotool")
-           (executable-find "xprop"))
-      t
-    nil))
+(defun circe-notifications-focus-in-hook ()
+  (setq circe-notifications-emacs-focused t))
 
-(defun circe-notifications-emacs-focused-p ()
-  "True if Emacs is focused by the window manager."
-  (when circe-notifications-check-window-focus
-    (cond ((circe-notifications-has-x-tools-p)
-           (let* ((focused-window
-                   (shell-command-to-string "xdotool getwindowfocus"))
-                  (window-class (shell-command-to-string
-                                 (concat "xprop WM_CLASS -id " focused-window)))
-                  (window-name (shell-command-to-string
-                                (concat "xprop WM_NAME -id " focused-window))))
-             (if (string-match "emacs" window-class)
-                 t
-               (if (and circe-notifications-term-name
-                        (string-match circe-notifications-term-name
-                                      window-class)
-                        (string-match "emacs" window-name))
-                   t
-                 nil))))
-          ((string-equal system-type "darwin")
-           (if (s-starts-with?
-                "Emacs"
-                (s-trim
-                 (shell-command-to-string
-                  (concat
-                   circe-notifications-osascript-command
-                   " -e 'tell application \"System Events\"' -e 'set"
-                   " frontApp to name of first application process whose"
-                   " frontmost is true' -e 'end tell'"))) t)
-               t
-             nil)))))
+(defun circe-notifications-focus-out-hook ()
+  (setq circe-notifications-emacs-focused nil))
 
 ;;;###autoload
 (defun enable-circe-notifications ()
@@ -296,7 +200,14 @@ the last message from NICK?"
   (advice-add 'circe-display-PRIVMSG :after 'circe-notifications-PRIVMSG)
   (advice-add 'circe-display-channel-quit :after 'circe-notifications-QUIT)
   (advice-add 'circe-display-JOIN :after 'circe-notifications-JOIN)
-  (advice-add 'circe-display-PART :after 'circe-notifications-PART))
+  (advice-add 'circe-display-PART :after 'circe-notifications-PART)
+  (add-hook 'focus-in-hook 'circe-notifications-focus-in-hook)
+  (add-hook 'focus-out-hook 'circe-notifications-focus-out-hook)
+  ;; If alert-user-configuration is nil, the :style keyword is ignored.
+  ;; Workaround for now is just to add a dummy rule that does nothing.
+  ;; https://github.com/jwiegley/alert/issues/30
+  (if (eq alert-user-configuration nil)
+      (alert-add-rule :continue t)))
 
 (defun disable-circe-notifications ()
   "Turn off notifications."
@@ -306,7 +217,9 @@ the last message from NICK?"
   (advice-remove 'circe-display-PRIVMSG 'circe-notifications-PRIVMSG)
   (advice-remove 'circe-display-channel-quit 'circe-notifications-QUIT)
   (advice-remove 'circe-display-JOIN 'circe-notifications-JOIN)
-  (advice-remove 'circe-display-PART 'circe-notifications-PART))
+  (advice-remove 'circe-display-PART 'circe-notifications-PART)
+  (remove-hook 'focus-in-hook 'circe-notifications-focus-in-hook)
+  (remove-hook 'focus-out-hook 'circe-notifications-focus-out-hook))
 
 (provide 'circe-notifications)
 ;;; circe-notifications.el ends here
