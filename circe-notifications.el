@@ -1,6 +1,6 @@
 ;;; circe-notifications.el --- Add desktop notifications to Circe.
 
-;; Copyright (C) 2014 - 2015 Ruben Maher
+;; Copyright (C) 2014 - 2016 Ruben Maher
 
 ;; Author: Ruben Maher <r@rkm.id.au>
 ;; URL: https://code.rkm.id.au/circe-notifications
