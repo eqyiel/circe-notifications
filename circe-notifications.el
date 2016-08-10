@@ -175,14 +175,9 @@ the last message from NICK?"
 
 (defun circe-notifications-nicks-on-all-networks ()
   "Get a list of all nicks in use according to `circe-network-options'."
-  (let ((x 0)
-        (nicks nil))
-    (while (< x (length circe-network-options))
-      (setq nicks
-            (append nicks
-                    (list (nth 2 (nth x circe-network-options)))))
-      (setq x (+ 1 x)))
-    nicks))
+  (delete-dups (mapcar (lambda (opt)
+                          (plist-get (cdr opt) :nick))
+                        circe-network-options)))
 
 (defun circe-notifications-focus-in-hook ()
   (setq circe-notifications-emacs-focused t))
