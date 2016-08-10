@@ -24,6 +24,7 @@
 ;; Michael McCracken <michael.mccracken@gmail.com>
 ;; Syohei YOSHIDA <syohex@gmail.com>
 ;; Steve Purcell <steve@sanityinc.com>
+;; Chris Barrett
 
 ;;; Code:
 
