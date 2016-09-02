@@ -2,6 +2,7 @@
 
 ;; Copyright (C) 2014 - 2016 Ruben Maher
 
+;; Version: 1.0
 ;; Author: Ruben Maher <r@rkm.id.au>
 ;; URL: https://github.com/eqyiel/circe-notifications
 ;; Package-Requires: ((emacs "24.4") (circe "2.3") (alert "1.2"))
