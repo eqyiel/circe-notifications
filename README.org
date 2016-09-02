@@ -33,7 +33,7 @@ Requires Circe >= 2.0.
 (autoload 'enable-circe-notifications "circe-notifications" nil t)
 
 (eval-after-load "circe-notifications"
-  '(setq setq circe-notifications-watch-strings
+  '(setq circe-notifications-watch-strings
       '("people" "you" "like" "to" "hear" "from")))
 
 (add-hook 'circe-server-connected-hook 'enable-circe-notifications)
