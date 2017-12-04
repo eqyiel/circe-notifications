@@ -26,6 +26,7 @@
 ;; Syohei YOSHIDA <syohex@gmail.com>
 ;; Steve Purcell <steve@sanityinc.com>
 ;; Chris Barrett
+;; Jay Kamat <jaygkamat@gmail.com>
 
 ;;; Code:
 
