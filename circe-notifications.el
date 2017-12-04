@@ -192,9 +192,9 @@ the last message from NICK?"
   "Turn on notifications."
   (interactive)
   (setq circe-notifications-watch-strings
-        (append circe-notifications-watch-strings
+        (remove nil (delete-dups (append circe-notifications-watch-strings
                 (circe-notifications-nicks-on-all-networks)
-                lui-highlight-keywords))
+                lui-highlight-keywords))))
   (advice-add 'circe-display-PRIVMSG :after 'circe-notifications-PRIVMSG)
   (advice-add 'circe-display-channel-quit :after 'circe-notifications-QUIT)
   (advice-add 'circe-display-JOIN :after 'circe-notifications-JOIN)
