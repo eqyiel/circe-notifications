@@ -205,8 +205,9 @@ the last message from NICK?"
   ;; If alert-user-configuration is nil, the :style keyword is ignored.
   ;; Workaround for now is just to add a dummy rule that does nothing.
   ;; https://github.com/jwiegley/alert/issues/30
-  (if (eq alert-user-configuration nil)
-      (alert-add-rule :continue t)))
+  (unless (append alert-user-configuration
+                  alert-internal-configuration)
+    (alert-add-rule :continue t)))
 
 (defun disable-circe-notifications ()
   "Turn off notifications."
